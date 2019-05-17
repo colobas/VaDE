@@ -27,6 +27,7 @@ import math
 from sklearn import mixture
 from sklearn.cluster import KMeans
 from keras.models import model_from_json
+from pinwheel import make_pinwheel_data
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -84,16 +85,21 @@ def load_data(dataset):
         Y=data['Y']-1
         X=X[:10200]
         Y=Y[:10200]
+    if dataset == 'pinwheel':
+        X, Y = make_pinwheel_data(0.3, 0.05, 3, 1000, 0.25)
 
     return X,Y
 
 def config_init(dataset):
+    # return original_dim,epoch,n_centroid,lr_nn,lr_gmm,decay_n,decay_nn,decay_gmm,alpha,datatype
     if dataset == 'mnist':
         return 784,3000,10,0.002,0.002,10,0.9,0.9,1,'sigmoid'
     if dataset == 'reuters10k':
         return 2000,15,4,0.002,0.002,5,0.5,0.5,1,'linear'
     if dataset == 'har':
         return 561,120,6,0.002,0.00002,10,0.9,0.9,5,'linear'
+    if dataset == 'pinwheel':
+        return 2,120,3,0.002,0.00002,10,0.9,0.9,5,'linear'
         
 def gmmpara_init():
     
@@ -173,6 +179,12 @@ def load_pretrain_weights(vade,dataset):
         g.fit(sample)
         u_p.set_value(floatX(g.means_.T))
         lambda_p.set_value((floatX(g.covars_.T)))
+    if dataset == 'pinwheel':
+        g = mixture.GMM(n_components=n_centroid,covariance_type='diag',random_state=3)
+        g.fit(sample)
+        u_p.set_value(floatX(g.means_.T))
+        lambda_p.set_value((floatX(g.covars_.T)))
+ 
     print ('pretrain weights loaded!')
     return vade
 #===================================
@@ -219,10 +231,10 @@ class EpochBegin(Callback):
 
 dataset = 'mnist'
 db = sys.argv[1]
-if db in ['mnist','reuters10k','har']:
+if db in ['mnist','reuters10k','har', 'pinwheel']:
     dataset = db
 print ('training on: ' + dataset)
-ispretrain = True
+ispretrain = (db != "pinwheel")
 batch_size = 100
 latent_dim = 10
 intermediate_dim = [500,500,2000]
@@ -264,3 +276,8 @@ vade.fit(X, X,
         nb_epoch=epoch,
         batch_size=batch_size,   
         callbacks=[epoch_begin])
+
+with open(db+".json", "w") as f:
+	f.write(vade.to_json())
+
+vade.save_weights("vade.h5")
